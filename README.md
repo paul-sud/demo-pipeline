@@ -43,7 +43,7 @@ kubectl -n argo port-forward deployment/argo-server 2746:2746
 * Note: if you've previously stopped the cluster, you can bring the server up again simply with `argo server`
 
 4. To test your Argo install, run some toy workflows. You can view them as they run on the UI or monitor them on the command line:
-```
+```bash
 argo submit --watch https://raw.githubusercontent.com/argoproj/argo/master/examples/hello-world.yaml
 argo submit --watch https://raw.githubusercontent.com/argoproj/argo/master/examples/coinflip.yaml
 ```
