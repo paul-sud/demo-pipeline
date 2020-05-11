@@ -1,0 +1,12 @@
+# See https://raw.githubusercontent.com/kubernetes/website/master/content/en/examples/pods/storage/pv-claim.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: test-data-pv-claim
+spec:
+  storageClassName: manual
+  accessModes:
+    - ReadOnlyMany
+  resources:
+    requests:
+      storage: 100Mi

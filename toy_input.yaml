@@ -1,0 +1,10 @@
+fastqs:
+  - path: file1.fastq.gz
+  - path: file2.fastq.gz
+leading: 5
+trailing: 5
+min_length: 80
+sliding_window: "4:25"
+bar_color: white
+flier_color: grey
+plot_color: darkgrid

@@ -1,91 +1,87 @@
-[![CircleCI](https://circleci.com/gh/ENCODE-DCC/demo-pipeline/tree/master.svg?style=svg)](https://circleci.com/gh/ENCODE-DCC/demo-pipeline/tree/master)
+# ENCODE demo-pipeline with Argo
 
-<p align="center">
-<a href="https://www.encodeproject.org">
-  <img style="float:left;" width="200" src="https://github.com/ENCODE-DCC/encode-data-usage-examples/blob/master/images/encodelogo.gif">
-</a>
-</p>
+**For demonstration purposes only, NOT production grade**
 
-ENCODE demo-pipeline
-========================
+See [ENCODE's original repo](https://github.com/ENCODE-DCC/demo-pipeline) for details on what the pipeline does. We will focus here on the mechanics of running the pipeline using [Argo](https://argoproj.github.io/), a [Kubernetes](https://kubernetes.io/)-native workflow execution system.
 
-This pipeline demonstrates the ENCODE pipeline reproducibility framework. Any pipeline deployed in this framework can be run on the cloud, on compute clusters with job-submission engines, or on stand-alone machines. It inherently makes use of parallelized/distributed computing. Pipeline installation is simple as most dependencies are automatically installed.
+# Guide
 
-Here we implement a simple bioinformatics pipeline but surround it with all of the ENCODE pipeline reproducibility infrastructure.  The bioinformatic task is to use the [Trimmomatic](http://www.usadellab.org/cms/?page=trimmomatic) software to trim input FASTQs. The output includes the trimmed FASTQ and a plot of FASTQ quality scores before and after trimming. For simplicity this demo supports only single-end FASTQs.
+## Install kubectl, minikube, Argo, and Helm
 
-After experimenting with this repo you can create your own fork and use it as a template to deploy your own pipeline, inheriting all of the multi-platform and reproducibility features.
-
-
-# Local quickstart
+The following instructions are for MacOS users, although the general proceduce should be similar on other platforms. The Argo setup process is copied from https://argoproj.github.io/docs/argo/getting-started.html .
 
 System requirements:
-  * [Java 8](https://www.java.com/en/download/) or higher.
   * [Docker CE](https://docs.docker.com/install/)
-  * Python 3.4.1 or higher.
+  * [brew](https://brew.sh) for installing packages
 
-1. Clone this repo and install Python packages:
-   * [Caper](https://github.com/ENCODE-DCC/caper#installation). Caper is a python wrapper for Cromwell.
-   * [Croo](https://github.com/ENCODE-DCC/croo#installation)
-
-  ```bash
-  $ git clone https://github.com/ENCODE-DCC/demo-pipeline
-  $ cd demo-pipeline
-  $ pip install caper
-  $ pip install croo
-  ```
-
-2. Add single-end FASTQ and Trimmomatic SLIDINGWINDOW parameter (filter reads that drop below average quality score of 30 in two-base window) to `input.json`:
-```js
-{
-    "toy.fastqs": [
-        "test/test_data/file1.fastq.gz"
-    ],
-    "toy.SLIDINGWINDOW": "2:30"
-}
+0. Install [kubectl](https://kubernetes.io/docs/tasks/tools/install-minikube/) and verify it:
+```bash
+brew install kubectl
+kubectl version --client
 ```
 
-3. Run WDL workflow using `input.json`, Cromwell, and Docker backend using Caper. **WARNING:** Pulling the Docker image may take some time depending on your network connection speed, please be patient:
+1. Install [minikube](https://kubernetes.io/docs/tasks/tools/install-minikube/), start the cluster, and verify that the cluster is up. If you have `Docker` installed, you should have `hyperkit` available, you can verify with `hyperkit -h`
+```bash
+brew install minikube
+minikube start --driver=hyperkit
+minikube status
+```
+
+2. Install the [Argo](https://argoproj.github.io/) CLI, install the Argo controller on the cluster, and create an admin role in the argo namespace:
+```bash
+brew install argoproj/tap/argo
+kubectl create namespace argo
+kubectl apply -n argo -f https://raw.githubusercontent.com/argoproj/argo/stable/manifests/install.yaml
+kubectl create rolebinding default-admin --clusterrole=admin --serviceaccount=default:default
+```
+
+3. (Optional, highly recommended) In another terminal window, start the Argo UI. Once it starts, you can visit the UI at http://127.0.0.1:2746/workflows
+```bash
+kubectl -n argo port-forward deployment/argo-server 2746:2746
+```
+
+* Note: if you've previously stopped the cluster, you can bring the server up again simply with `argo server`
+
+4. To test your Argo install, run some toy workflows. You can view them as they run on the UI or monitor them on the command line:
+```
+argo submit --watch https://raw.githubusercontent.com/argoproj/argo/master/examples/hello-world.yaml
+argo submit --watch https://raw.githubusercontent.com/argoproj/argo/master/examples/coinflip.yaml
+```
+
+## Run a toy NGS workflow
+
+5. To run a workflow with persistent data, we could either use Argo artifacts or a Kubernetes PersisentVolume (PV). Artifacts work better for Argo, since they do nice things like automatically convert directories to tarballs, and automatically perform gzip compression and are in general easier to work with.
+
+Here we will use a PV since it doesn't require an account with a cloud storage provider. To get a feel of how volumes work, create a PersistentVolumeClaim (PVC) and run a test workflow using the PVC:
 
 ```bash
-$ caper run toy.wdl -i examples/local/input.json --use-docker
+kubectl create -f https://raw.githubusercontent.com/argoproj/argo/master/examples/testvolume.yaml
+argo submit https://raw.githubusercontent.com/argoproj/argo/master/examples/volumes-existing.yaml
 ```
 
-4. Find the `metadata.json` in Caper's output directory and organize outputs with `croo`. The `WF_ID` is a unique key for the pipeline run and is indicated in Caper's logs.
+To create something we can use to pass in the input data, we can create a ReadOnlyMany (ROX) persistent volume. Edit the file `hostpath-volume.yaml` to point to where the test data is on your system, then create the PersistentVolume and PVC. We also need to make the test data in this repo accessible from the Kubernetes Node.
+
+Open another terminal window, `cd` to the repo root, and run the following to mount the test data:
 
 ```bash
-$ croo toy/[WF_ID]/metadata.json --out-dir output
+minikube mount $PWD/demo-pipeline/data:/mnt/data
 ```
 
-5. Examine outputs using the html page generated by croo:
+You can verify the presence of the data by SSHing onto the node with `minikube ssh` and `ls`ing `/mnt/data`. Next, create the PersistentVolume and PersistentVolumeClaim resources:
+
 ```bash
-# Mac only
-$ open output/croo.report.[WF_ID].html
+kubectl apply -f hostpath-volume.yaml
+kubectl apply -f hostpath-pvc.yaml
 ```
-![Example croo html](examples/local/images/demo-pipeline-croo.png)
 
-6. Examine quality score plot:
+6. Now that we have all the pieces in place, we can run our toy workflow.
+
 ```bash
-# Mac only
-$ open output/plots/file1_untrimmed_file1_trimmed_quality_scores.png
+argo submit toy.yaml --parameter-file toy_input.yaml
 ```
-<p align="center">
-<img style="float:left;" width="1000" src="https://raw.githubusercontent.com/ENCODE-DCC/demo-pipeline/master/examples/local/output_plot/file1_untrimmed_file1_trimmed_quality_scores.png">
-</p>
 
+Because we mounted the `data` folder, you will see the `png` plots outputted there.
 
-# Installation/tutorial
+## Conclusion
 
-The following tutorials use Caper to run the pipeline, where applicable. For tutorials on running the pipeline without Caper, see [previous tutorials](docs/deprecated)
-
-* [Local system with docker](docs/tutorial_local_docker.md)
-* [Local system with singularity](docs/tutorial_local_singularity.md)
-* [Google Cloud Platform](docs/tutorial_google.md)
-* [DNANexus Platform with dxWDL CLI](docs/tutorial_dx_cli.md)
-* [DNANexus Platform with Web UI](docs/tutorial_dx_web.md)
-* [Stanford SCG](docs/tutorial_scg.md)
-* [Stanford Sherlock 2.0](docs/tutorial_sherlock.md)
-
-
-### [Input](docs/input.md)
-
-### [Output](docs/output.md)
+🎉 Congrats! You made it to the end of this example. Hopefully you are now a little more familiar with Argo workflows and how it works with Kubernetes. For more reading, check out the [Argo examples](https://github.com/argoproj/argo/tree/master/examples), there are a lot of features we didn't cover here.

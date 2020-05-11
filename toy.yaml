@@ -1,0 +1,138 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: toy-
+spec:
+  # The template to invoke when running
+  entrypoint: toy
+  arguments:
+    parameters:
+      - name: fastqs
+      - name: leading
+      - name: trailing
+      - name: min_length
+      - name: sliding_window
+      - name: bar_color
+      - name: flier_color
+      - name: plot_color
+  volumes:
+    # Pass my-existing-volume as an argument to the volumes-existing-example template
+    # Same syntax as k8s Pod spec
+    - name: workdir
+      persistentVolumeClaim:
+        claimName: my-existing-volume
+    - name: test-data
+      persistentVolumeClaim:
+        claimName: test-data-pv-claim
+  templates:
+    # Main workflow definition, run the trim and plot DAG for each input fastq. This
+    # extra dag allows the trim-and-plot subdag to not have to worry about matching
+    # up the raw and trimmed fastqs
+    - name: toy
+      dag:
+        tasks:
+          - name: trim-and-plot-fastqs
+            template: trim-and-plot-fastq
+            arguments:
+              parameters:
+                - name: fastq
+                  value: "{{item.path}}"
+            withParam: "{{workflow.parameters.fastqs}}"
+
+    - name: trim-and-plot-fastq
+      inputs:
+        parameters:
+        - name: fastq
+      dag:
+        tasks:
+          - name: trim
+            template: trim
+            arguments:
+              parameters:
+                - name: fastq
+                  value: "{{inputs.parameters.fastq}}"
+                - name: leading
+                  value: "{{workflow.parameters.leading}}"
+                - name: trailing
+                  value: "{{workflow.parameters.trailing}}"
+                - name: min_length
+                  value: "{{workflow.parameters.min_length}}"
+                - name: sliding_window
+                  value: "{{workflow.parameters.sliding_window}}"
+          - name: plot
+            template: plot
+            # DAG dependency
+            dependencies: [trim]
+            arguments:
+              parameters:
+                - name: before_trimming
+                  value: "{{inputs.parameters.fastq}}"
+                - name: after_trimming
+                  value: "{{tasks.trim.outputs.parameters.path}}"
+                - name: bar_color
+                  value: "{{workflow.parameters.bar_color}}"
+                - name: flier_color
+                  value: "{{workflow.parameters.flier_color}}"
+                - name: plot_color
+                  value: "{{workflow.parameters.plot_color}}"
+
+    - name: trim
+      inputs:
+        parameters:
+          - name: fastq
+          - name: leading
+          - name: trailing
+          - name: min_length
+          - name: sliding_window
+      # We don't strictly need script here, since we don't use the output, but it is
+      # more legible than passing them as `args`
+      script:
+        image: quay.io/encode-dcc/demo-pipeline:template
+        command: [bash]
+        source: |
+          FASTQ=/mnt/data/{{inputs.parameters.fastq}}
+          INPUT_FILE=$(basename ${FASTQ})
+          OUTPUT_PATH="trimmed.${INPUT_FILE}"
+          echo "${OUTPUT_PATH}" > /tmp/output.txt
+          java -jar /software/Trimmomatic-0.38/trimmomatic-0.38.jar \
+            SE -phred33 ${FASTQ} "/mnt/vol/${OUTPUT_PATH}" \
+            LEADING:{{inputs.parameters.leading}} \
+            TRAILING:{{inputs.parameters.trailing}} \
+            SLIDINGWINDOW:{{inputs.parameters.sliding_window}} \
+            MINLEN:{{inputs.parameters.min_length}}
+        # volumeMounts go under script defintion
+        volumeMounts:
+          - name: workdir
+            mountPath: /mnt/vol
+          - name: test-data
+            mountPath: /mnt/data
+      outputs:
+        parameters:
+          - name: path
+            valueFrom:
+              path: /tmp/output.txt
+
+    - name: plot
+      inputs:
+        parameters:
+          - name: before_trimming
+          - name: after_trimming
+          - name: bar_color
+          - name: flier_color
+          - name: plot_color
+      script:
+        image: quay.io/encode-dcc/demo-pipeline:template
+        command: [bash]
+        source: |
+          python3 /software/demo-pipeline/src/plot_fastq_scores.py \
+            --untrimmed /mnt/data/{{inputs.parameters.before_trimming}} \
+            --trimmed /mnt/vol/{{inputs.parameters.after_trimming}} \
+            --bar-color {{inputs.parameters.bar_color}} \
+            --flier-color {{inputs.parameters.flier_color}} \
+            --plot-color {{inputs.parameters.plot_color}}
+          mv *quality_scores.png /mnt/data
+        volumeMounts:
+          - name: workdir
+            mountPath: /mnt/vol
+          - name: test-data
+            mountPath: /mnt/data

@@ -1,7 +1,0 @@
-{
-    "plot.before_trimming": "test/test_data/file1.fastq.gz",
-    "plot.after_trimming": "test/test_data/file2.fastq.gz",
-    "plot.bar_color": "white",
-    "plot.flier_color": "grey",
-    "plot.plot_color": "darkgrid"
-}
