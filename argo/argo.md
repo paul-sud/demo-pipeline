@@ -1,6 +1,6 @@
 # ENCODE demo-pipeline with Argo
 
-In this guide you will walk through running the demo pipeline on a local single-node Kubernetes cluster.
+In this guide you will walk through running the demo pipeline on a local single-node Kubernetes cluster using [Argo](https://argoproj.github.io/). Argo extends the Kubernetes API to enable running workflows where the individual tasks execute in pods. If you read about it, you'll see a lot of examples of it being used for CI/CD pipelines, however the Argo API itself is generic and can support other use cases as well, as you'll see here.
 
 ## Install kubectl, minikube, Argo, and Helm
 
@@ -8,7 +8,7 @@ The following instructions are for MacOS users, although the general proceduce s
 
 System requirements:
   * [Docker CE](https://docs.docker.com/install/)
-  * [brew](https://brew.sh) for installing packages
+  * [brew](https://brew.sh) for installing packages (MacOS only)
 
 0. Install [kubectl](https://kubernetes.io/docs/tasks/tools/install-minikube/) and verify it:
 ```bash
@@ -22,6 +22,8 @@ brew install minikube
 minikube start --driver=hyperkit
 minikube status
 ```
+
+* Note: after you have started `minikube` for the first time with the `hyperkit` driver, you do not need to specify it explicitly when you restart the cluster
 
 2. Install the [Argo](https://argoproj.github.io/) CLI, install the Argo controller on the cluster, and create an admin role in the argo namespace:
 ```bash
@@ -48,7 +50,7 @@ argo submit --watch https://raw.githubusercontent.com/argoproj/argo/master/examp
 
 5. To run a workflow with persistent data, we could either use Argo artifacts or a Kubernetes PersisentVolume (PV). Artifacts work better for Argo, since they do nice things like automatically convert directories to tarballs, and automatically perform gzip compression and are in general easier to work with.
 
-Here we will use a PV since it doesn't require an account with a cloud storage provider. To get a feel of how volumes work, create a PersistentVolumeClaim (PVC) and run a test workflow using the PVC:
+Here we will use a PV since it is somewhat easier to set up. To get a feel of how volumes work, create a PersistentVolumeClaim (PVC) and run a test workflow using the PVC:
 
 ```bash
 kubectl create -f https://raw.githubusercontent.com/argoproj/argo/master/examples/testvolume.yaml

@@ -1,0 +1,17 @@
+# See https://raw.githubusercontent.com/kubernetes/website/master/content/en/examples/pods/storage/pv-volume.yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: kubeflow-data
+  labels:
+    type: local
+spec:
+  storageClassName: manual
+  capacity:
+    storage: 100Gi
+  accessModes:
+    - ReadWriteMany
+  hostPath:
+    # This refers to a path on the Node. If you are using minikube you can use minikube
+    # mount to mount a folder on your computer to /mnt/data to sync
+    path: "/data/"
