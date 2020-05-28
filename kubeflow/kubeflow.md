@@ -53,8 +53,6 @@ kubectl port-forward -n kubeflow svc/ml-pipeline-ui 8080:80
 
 This can take quite some time due to the number of containers. You can check the status of the pods with `kubectl get pods -n kubeflow`. Once they are ready, launch and go to the UI.
 
-Note: with Kubernetes 1.18, I experience errors starting the `cache-deployer-deployment` pod and it enters `CrashLoopBackOff` . I would recommend using 1.17 or lower.
-
 ## Running pipelines
 
 4. From the UI, run one of the examples to verify that the install is working.
@@ -77,13 +75,15 @@ source venv/bin/activate/
 kubectl port-forward -n kubeflow svc/minio-service 9000:9000
 ```
 
-Go to http://localhost:9000 in your browser and login with username `minio` and password `minio123`
+Go to http://localhost:9000 in your browser and login with username `minio` and password `minio123` . Make a new bucket called `data`, then upload the files from the `data` folder in this repo to it.
 
-6. Now that we have all the pieces in place, we can run our toy workflow. Once again, run these from the `argo` directory in this repo:
+6. Now that we have all the pieces in place, we can run our toy workflow. First, compile the workflow:
 
 ```bash
-argo submit toy.yaml --parameter-file toy_input.yaml
+dsl-compile  --disable-telemetry --py toy.py --output toy.tar.gz
 ```
+
+Then, go to the UI at http://localhost:8080 and upload `toy.tar.gz`.
 
 Because we mounted the `data` folder, you will see the `png` plots outputted there.
 

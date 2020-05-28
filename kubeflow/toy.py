@@ -1,10 +1,9 @@
 from kfp import dsl
-from kfp.components import InputPath, func_to_container_op
+from kfp.components import InputPath, OutputPath, func_to_container_op
 
 
-@func_to_container_op(base_image="quay.io/encode-dcc/demo-pipeline:template")
 def trim(
-    input_fastq: InputPath("Fastq"),
+    fastq: InputPath("Fastq"),
     leading: int,
     trailing: int,
     minlen: int,
@@ -21,8 +20,12 @@ def trim(
 
     subprocess.run(
         [
-            "java -jar /software/Trimmomatic-0.38/trimmomatic-0.38.jar SE -phred33",
-            input_fastq,
+            "java",
+            "-jar",
+            "/software/Trimmomatic-0.38/trimmomatic-0.38.jar",
+            "SE",
+            "-phred33",
+            fastq,
             trimmed_fastq,
             "LEADING:{}".format(leading),
             "TRAILING:{}".format(trailing),
@@ -33,13 +36,12 @@ def trim(
     )
 
 
-@func_to_container_op(base_image="quay.io/encode-dcc/demo-pipeline:template")
 def plot(
     fastq: InputPath("Fastq"),
     trimmed_fastq: InputPath("TrimmedFastq"),
-    bar_color: int,
-    flier_color: int,
-    plot_color: int,
+    bar_color: str,
+    flier_color: str,
+    plot_color: str,
     plot: OutputPath("Plot")
 ) -> None:
     """
@@ -63,21 +65,37 @@ def plot(
     )
 
 
+trim_op = func_to_container_op(trim, base_image="quay.io/encode-dcc/demo-pipeline:template")
+plot_op = func_to_container_op(plot, base_image="quay.io/encode-dcc/demo-pipeline:template")
+
+
 @dsl.pipeline(
     name='ENCODE Demo Pipeline',
     description='A Kubeflow Pipelines implementation of the ENCODE DCC demo pipeline'
 )
 def demo_pipeline(
-    output,
-    project,
-    region='us-central1',
-    train_data='gs://ml-pipeline-playground/sfpd/train.csv',
-    eval_data='gs://ml-pipeline-playground/sfpd/eval.csv',
-    schema='gs://ml-pipeline-playground/sfpd/schema.json',
-    target='resolution',
-    rounds=200,
-    workers=2,
-    true_label='ACTION',
+    fastqs=["minio://data/file1.fastq.gz", "minio://data/file2.fastq.gz"],
+    leading: int = 5,
+    trailing: int = 5,
+    minlen: int = 80,
+    sliding_window: str = "4:25",
+    bar_color: str = "white",
+    flier_color: str = "grey",
+    plot_color: str = "darkgrid",
 ):
-    with dsl.ParallelFor([{"a": 1, "b": 10}, {"a": 2, "b": 20}]) as item:
-        op1 = plot(…, args=["echo {}".format(item.a)])
+    with dsl.ParallelFor(fastqs) as fastq:
+        trim_task = trim_op(
+            fastq=fastq,
+            leading=leading,
+            trailing=trailing,
+            minlen=minlen,
+            sliding_window=sliding_window,
+        )
+
+        _ = plot_op(
+            fastq=fastq,
+            trimmed_fastq=trim_task.outputs["trimmed_fastq"],
+            bar_color=bar_color,
+            flier_color=flier_color,
+            plot_color=plot_color
+        )
