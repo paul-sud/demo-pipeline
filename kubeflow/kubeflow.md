@@ -69,13 +69,22 @@ source venv/bin/activate/
 
 ## Run a toy NGS workflow
 
-5. Upload the test data to the `minio` repository. First expose the UI service:
+5. Set up the test data so that it is accessible from Kubernetes.
+
+To create something we can use to pass in the input data, we can create a ReadOnlyMany (ROX) persistent volume. Edit the file `hostpath-volume.yaml` to point to where the test data is on your system (i.e. the absolute path to this repo's `data` directory), then create the PersistentVolume and PVC. We also need to make the test data in this repo accessible from the Kubernetes Node.
+
+Open another terminal window, `cd` to the repo root, and run the following to mount the test data:
 
 ```bash
-kubectl port-forward -n kubeflow svc/minio-service 9000:9000
+minikube mount $PWD/data:/mnt/data
 ```
 
-Go to http://localhost:9000 in your browser and login with username `minio` and password `minio123` . Make a new bucket called `data`, then upload the files from the `data` folder in this repo to it.
+You can verify the presence of the data by SSHing onto the node with `minikube ssh` and `ls`ing `/mnt/data`. Next, create the PersistentVolume and PersistentVolumeClaim resources from the `kubeflow` directory of this repository:
+
+```bash
+kubectl apply -f hostpath-volume.yaml
+kubectl apply -f hostpath-pvc.yaml -n kubeflow
+```
 
 6. Now that we have all the pieces in place, we can run our toy workflow. First, compile the workflow:
 
@@ -83,9 +92,7 @@ Go to http://localhost:9000 in your browser and login with username `minio` and 
 dsl-compile  --disable-telemetry --py toy.py --output toy.tar.gz
 ```
 
-Then, go to the UI at http://localhost:8080 and upload `toy.tar.gz`.
-
-Because we mounted the `data` folder, you will see the `png` plots outputted there.
+Then, go to the UI at http://localhost:8080 and upload `toy.tar.gz` by clicking on `Pipelines` in the menu on the left and then clicking on `Upload pipeline` in the upper right corner. Give it the name "Demo pipeline", then launch a run of the pipeline.
 
 ## Conclusion
 
