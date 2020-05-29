@@ -1,6 +1,6 @@
 # ENCODE demo-pipeline with Kubeflow Pipelines
 
-In this guide you will walk through running the demo pipeline on a local single node Kubernetes cluster using [Kubeflow Pipelines](https://www.kubeflow.org/docs/pipelines/). Under the hood, it relies on [Argo](https://argoproj.github.io/) to execute the workflow. However, there is also a 
+In this guide you will walk through running the demo pipeline on a local single node Kubernetes cluster using [Kubeflow Pipelines](https://www.kubeflow.org/docs/pipelines/). Under the hood, it relies on [Argo](https://argoproj.github.io/) to execute the workflow.
 
 ## Install kubectl, minikube, and Kubeflow Pipelines
 
@@ -17,7 +17,7 @@ brew install kubectl
 kubectl version --client
 ```
 
-1. Install [minikube](https://kubernetes.io/docs/tasks/tools/install-minikube/), start the cluster, and verify that the cluster is up. If you have `Docker` installed, you should have `hyperkit` available, you can verify with `hyperkit -h` . This will NOT work with Kubernetes 1.18
+1. Install [minikube](https://kubernetes.io/docs/tasks/tools/install-minikube/), start the cluster, and verify that the cluster is up. If you have `Docker` installed, you should have `hyperkit` available, you can verify with `hyperkit -h` . This will NOT work with Kubernetes 1.18:
 ```bash
 brew install minikube
 minikube start \
@@ -41,17 +41,19 @@ minikube delete
 kubectl apply -f hostpath-pv.yaml
 ```
 
-3. Install Kubeflow Pipelines and launch expose the UI at http://localhost:8080:
+3. Install Kubeflow Pipelines:
 ```bash
 export PIPELINE_VERSION=0.5.1
 kubectl apply -k "github.com/kubeflow/pipelines/manifests/kustomize/cluster-scoped-resources?ref=$PIPELINE_VERSION"
 kubectl wait crd/applications.app.k8s.io --for condition=established --timeout=60s
 kubectl apply -k "github.com/kubeflow/pipelines/manifests/kustomize/env/platform-agnostic/?ref=$PIPELINE_VERSION"
 kubectl wait applications/pipeline -n kubeflow --for condition=Ready --timeout=1800s
-kubectl port-forward -n kubeflow svc/ml-pipeline-ui 8080:80
 ```
 
-This can take quite some time due to the number of containers. You can check the status of the pods with `kubectl get pods -n kubeflow`. Once they are ready, launch and go to the UI.
+This can take quite some time due to the number of containers. You can check the status of the pods with `kubectl get pods -n kubeflow`. Once they are ready, launch and go to the UI at http://localhost:8080:
+```bash
+kubectl port-forward -n kubeflow svc/ml-pipeline-ui 8080:80
+```
 
 ## Running pipelines
 
@@ -59,7 +61,7 @@ This can take quite some time due to the number of containers. You can check the
 
 ## Set up Python environment for Kubeflow Pipelines SDK
 
-1. Create a Python virtual environment and install the SDK:
+5. Create a Python virtual environment and install the SDK:
 
 ```bash
 python -m venv venv
@@ -69,7 +71,7 @@ source venv/bin/activate/
 
 ## Run a toy NGS workflow
 
-5. Set up the test data so that it is accessible from Kubernetes.
+6. Set up the test data so that it is accessible from Kubernetes.
 
 To create something we can use to pass in the input data, we can create a ReadOnlyMany (ROX) persistent volume. Edit the file `hostpath-volume.yaml` to point to where the test data is on your system (i.e. the absolute path to this repo's `data` directory), then create the PersistentVolume and PVC. We also need to make the test data in this repo accessible from the Kubernetes Node.
 
@@ -86,7 +88,7 @@ kubectl apply -f hostpath-volume.yaml
 kubectl apply -f hostpath-pvc.yaml -n kubeflow
 ```
 
-6. Now that we have all the pieces in place, we can run our toy workflow. First, compile the workflow:
+7. Now that we have all the pieces in place, we can run our toy workflow. First, compile the workflow:
 
 ```bash
 dsl-compile  --disable-telemetry --py toy.py --output toy.tar.gz
